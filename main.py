@@ -61,7 +61,7 @@ def create_optimized_driver(timeout):
     
     return driver
 
-def open_product_link_single(url, search_text, initial_timeout=10, max_retries=500):
+def open_product_link_single(url, search_text, initial_timeout=10, max_retries=99999):
     attempt = 0
     while attempt < max_retries:
         timeout = initial_timeout
@@ -143,7 +143,7 @@ def open_product_link_single(url, search_text, initial_timeout=10, max_retries=5
     print(f"\nWindow {threading.current_thread().name} - Max retries ({max_retries}) reached. Script terminated.")
     return False
 
-def run_concurrent_searches(url, search_text, num_windows=1, timeout=60):
+def run_concurrent_searches(url, search_text, num_windows=1, timeout=60, delay=10):
     print(f"Starting {num_windows} concurrent search windows...")
     
     futures = []
@@ -151,7 +151,7 @@ def run_concurrent_searches(url, search_text, num_windows=1, timeout=60):
         for i in range(num_windows):
             if i > 0:
                 print(f"Waiting 10 seconds before starting window {i+1}...")
-                time.sleep(10)
+                time.sleep(delay)
             
             futures.append(executor.submit(open_product_link_single, url, search_text, timeout))
         
@@ -161,10 +161,46 @@ def run_concurrent_searches(url, search_text, num_windows=1, timeout=60):
     print(f"\nSearch completed. {successful_searches} out of {num_windows} product found.")
     return any(results)
 
-if __name__ == "__main__":
-    url = "https://marketplace.nvidia.com/da-dk/consumer/graphics-cards/?locale=da-dk&page=1&limit=12&sorting=fp&manufacturer=NVIDIA&manufacturer_filter=NVIDIA~3,ASUS~12,GAINWARD~1,GIGABYTE~20,INNO3D~13,MSI~11,PALIT~7,PNY~4,ZOTAC~10"
-    search_text = "5080"
-    success = run_concurrent_searches(url, search_text, 10)
+def get_url_input():
+    while True:
+        print("\nURL Selection:")
+        print("1. Use default NVIDIA marketplace URL (Recommended for 50XX series Founder Edition)")
+        print("2. Enter custom marketplace URL")
+        choice = input("Enter your choice (1 or 2): ")
+        
+        if choice == "1":
+            return "https://marketplace.nvidia.com/da-dk/consumer/graphics-cards/?locale=da-dk&page=1&limit=12&sorting=fp&manufacturer=NVIDIA&manufacturer_filter=NVIDIA~3,ASUS~12,GAINWARD~1,GIGABYTE~20,INNO3D~13,MSI~11,PALIT~7,PNY~4,ZOTAC~10"
+        elif choice == "2":
+            return input("Enter your custom URL: ").strip()
+        else:
+            print("Invalid choice. Please enter 1 or 2.")
+
+def get_integer_input(prompt, min_value=1):
+    while True:
+        try:
+            value = int(input(prompt))
+            if value >= min_value:
+                return value
+            print(f"Please enter a number greater than or equal to {min_value}")
+        except ValueError:
+            print("Please enter a valid number")
+
+def main():
+    # Get URL
+    url = get_url_input()
+    
+    search_text = input("\nEnter the search text (e.g., 5080): ").strip()
+    
+    windows = get_integer_input("\nEnter the number of windows to run (recommended: 6): ")
+    
+    timeout = get_integer_input("\nEnter the timeout value in seconds (recommended: 60): ")
+    
+    delay = get_integer_input("\nEnter the delay between each window in seconds (recommended: 10): ")
+    
+    success = run_concurrent_searches(url, search_text, windows, timeout, delay)
     
     if not success:
         print("Failed to find and open product link in all windows.")
+
+if __name__ == "__main__":
+    main()
