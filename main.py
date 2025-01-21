@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -10,10 +11,10 @@ import json
 import time
 import random
 from concurrent.futures import ThreadPoolExecutor
-import winsound  # Added for sound alert
+import winsound
+import threading
 
 def play_alert_sound():
-    # Play a 1000Hz sound for 2 seconds
     frequency = 800
     duration = 1000  # milliseconds
     winsound.Beep(frequency, duration)
@@ -25,17 +26,46 @@ def loading_is_inactive(driver):
     indicator_html = driver.execute_script(
         "return document.querySelector('css-loading-indicator')?.innerHTML?.trim()"
     )
-    # The loading bar is considered inactive if indicator_html equals '\x3C!---->'
     return indicator_html == '\x3C!---->'
 
-def open_product_link_single(url, search_text, initial_timeout=10, max_retries=500, ):
+def create_optimized_driver(timeout):
+    chrome_options = Options()
+    
+    # Performance optimizations
+    chrome_options.add_experimental_option(
+        "prefs", {
+            "profile.managed_default_content_settings.images": 2,
+            "profile.default_content_setting_values.images": 2,
+            "profile.default_content_settings.javascript": 1,  # Keep JavaScript enabled for your case
+            "profile.managed_default_content_settings.cookies": 1,
+            "profile.default_content_settings.plugins": 2,
+        }
+    )
+    
+    # Additional performance options
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("--disable-infobars")
+    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+    
+    # Set page load strategy
+    chrome_options.page_load_strategy = 'eager'
+    
+    # Create service and driver
+    service = Service('chromedriver-win64/chromedriver.exe')
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    driver.set_page_load_timeout(timeout)
+    
+    return driver
+
+def open_product_link_single(url, search_text, initial_timeout=10, max_retries=500):
     attempt = 0
     while attempt < max_retries:
         timeout = initial_timeout
-        
-        service = Service('chromedriver-win64/chromedriver.exe')
-        driver = webdriver.Chrome(service=service)
-        driver.set_page_load_timeout(timeout)
+        driver = create_optimized_driver(timeout)
         
         try:
             print(f"\nWindow {threading.current_thread().name} - Attempt {attempt + 1} of {max_retries}")
@@ -43,8 +73,7 @@ def open_product_link_single(url, search_text, initial_timeout=10, max_retries=5
             
             driver.get(url)
             
-        
-            wait = WebDriverWait(driver, 30)  # or some smaller period
+            wait = WebDriverWait(driver, 30)
             wait.until(loading_is_inactive)
             print("Loading bar is no longer active.")
             
@@ -74,7 +103,7 @@ def open_product_link_single(url, search_text, initial_timeout=10, max_retries=5
                         if direct_purchase_link:
                             print(f"Success in window {threading.current_thread().name}! Opening link: {direct_purchase_link}")
                             webbrowser.open(direct_purchase_link)
-                            play_alert_sound()  # Play sound when product is found
+                            play_alert_sound()
                             driver.quit()
                             return True
                         else:
@@ -113,34 +142,29 @@ def open_product_link_single(url, search_text, initial_timeout=10, max_retries=5
             
     print(f"\nWindow {threading.current_thread().name} - Max retries ({max_retries}) reached. Script terminated.")
     return False
- 
+
 def run_concurrent_searches(url, search_text, num_windows=1, timeout=60):
     print(f"Starting {num_windows} concurrent search windows...")
     
     futures = []
     with ThreadPoolExecutor(max_workers=num_windows) as executor:
         for i in range(num_windows):
-            # Stagger each new window by 10 seconds
             if i > 0:
                 print(f"Waiting 10 seconds before starting window {i+1}...")
                 time.sleep(10)
             
-            # Submit the task to ThreadPoolExecutor
             futures.append(executor.submit(open_product_link_single, url, search_text, timeout))
         
-        # Once all tasks are submitted, wait for them to complete
         results = [future.result() for future in futures]
 
     successful_searches = sum(1 for result in results if result)
-    print(f"\nSearch completed. {successful_searches} out of {num_windows} windows found products.")
+    print(f"\nSearch completed. {successful_searches} out of {num_windows} product found.")
     return any(results)
 
 if __name__ == "__main__":
-    import threading  # Added import for thread naming
-    
-    url = "https://marketplace.nvidia.com/da-dk/consumer/graphics-cards/?locale=da-dk&page=1&limit=12&sorting=fp&manufacturer=GAINWARD&manufacturer_filter=NVIDIA~3,ASUS~12,GAINWARD~2,GIGABYTE~18,INNO3D~14,MSI~12,PALIT~6,PNY~5,ZOTAC~11"
-    search_text = "4060"
-    success = run_concurrent_searches(url, search_text, 1)
+    url = "https://marketplace.nvidia.com/da-dk/consumer/graphics-cards/?locale=da-dk&page=1&limit=12&sorting=fp&manufacturer=NVIDIA&manufacturer_filter=NVIDIA~3,ASUS~12,GAINWARD~1,GIGABYTE~20,INNO3D~13,MSI~11,PALIT~7,PNY~4,ZOTAC~10"
+    search_text = "5080"
+    success = run_concurrent_searches(url, search_text, 10)
     
     if not success:
         print("Failed to find and open product link in all windows.")
