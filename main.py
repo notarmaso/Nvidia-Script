@@ -14,9 +14,9 @@ from concurrent.futures import ThreadPoolExecutor
 import winsound
 import threading
 
-def play_alert_sound():
+def play_alert_sound(alarm_length):
     frequency = 800
-    duration = 1000  # milliseconds
+    duration = alarm_length  # milliseconds
     winsound.Beep(frequency, duration)
 
 def loading_is_inactive(driver):
@@ -61,7 +61,7 @@ def create_optimized_driver(timeout):
     
     return driver
 
-def open_product_link_single(url, search_text, initial_timeout=10, max_retries=99999):
+def open_product_link_single(url, search_text, initial_timeout, alarm_length, max_retries=99999):
     attempt = 0
     while attempt < max_retries:
         timeout = initial_timeout
@@ -103,7 +103,7 @@ def open_product_link_single(url, search_text, initial_timeout=10, max_retries=9
                         if direct_purchase_link:
                             print(f"Success in window {threading.current_thread().name}! Opening link: {direct_purchase_link}")
                             webbrowser.open(direct_purchase_link)
-                            play_alert_sound()
+                            play_alert_sound(alarm_length)
                             driver.quit()
                             return True
                         else:
@@ -143,7 +143,7 @@ def open_product_link_single(url, search_text, initial_timeout=10, max_retries=9
     print(f"\nWindow {threading.current_thread().name} - Max retries ({max_retries}) reached. Script terminated.")
     return False
 
-def run_concurrent_searches(url, search_text, num_windows=1, timeout=60, delay=10):
+def run_concurrent_searches(url, search_text, num_windows=1, timeout=60, delay=10, alarm_length=5000):
     print(f"Starting {num_windows} concurrent search windows...")
     
     futures = []
@@ -153,7 +153,7 @@ def run_concurrent_searches(url, search_text, num_windows=1, timeout=60, delay=1
                 print(f"Waiting 10 seconds before starting window {i+1}...")
                 time.sleep(delay)
             
-            futures.append(executor.submit(open_product_link_single, url, search_text, timeout))
+            futures.append(executor.submit(open_product_link_single, url, search_text, timeout, alarm_length))
         
         results = [future.result() for future in futures]
 
@@ -197,7 +197,9 @@ def main():
     
     delay = get_integer_input("\nEnter the delay between each window in seconds (recommended: 10): ")
     
-    success = run_concurrent_searches(url, search_text, windows, timeout, delay)
+    alarm_length = get_integer_input("\nEnter the lengths of the alarm in ms (recommended: 5000): ")
+
+    success = run_concurrent_searches(url, search_text, windows, timeout, delay, alarm_length)
     
     if not success:
         print("Failed to find and open product link in all windows.")
